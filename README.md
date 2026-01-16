@@ -171,6 +171,8 @@ pnpm dev
 | `TEMPORAL_ADDRESS` | Yes | Temporal server (default: localhost:7233) |
 | `TEMPORAL_NAMESPACE` | Yes | Temporal namespace |
 | `ENCRYPTION_KEY` | Yes | Key to decrypt processor credentials |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | No | OpenTelemetry collector endpoint (default: http://localhost:4318) |
+| `OTEL_SERVICE_NAME` | No | Service name for telemetry (default: loop-processor-core) |
 
 ## Adding a New Processor
 
@@ -181,13 +183,51 @@ pnpm dev
 
 See [processor-stripe](https://github.com/payloops/processor-stripe) for a complete example.
 
-## Monitoring
+## Observability
+
+The processor-core is fully instrumented with OpenTelemetry for distributed tracing, metrics, and structured logging.
+
+### What's Collected
+
+| Type | Description |
+|------|-------------|
+| **Traces** | Activity spans with workflow context, processor calls |
+| **Metrics** | Activity execution counts, durations, error rates |
+| **Logs** | Structured JSON logs with `trace_id`, `span_id`, workflow context |
+
+### Activity Tracing
+
+Every activity execution is automatically traced with:
+
+```
+activity.processPayment
+├── temporal.activity.type: processPayment
+├── temporal.workflow.id: payment-ord_abc123
+├── temporal.task_queue: payment-queue
+└── duration: 245ms
+```
+
+### Correlation with Backend
+
+When the backend triggers a workflow, the correlation ID is propagated via:
+- **Search Attributes**: `CorrelationId`, `MerchantId`, `OrderId`
+- **Memo**: `traceContext`, `correlationId`
+
+This enables end-to-end tracing from HTTP request → workflow → activities.
+
+### Viewing in OpenObserve
+
+1. Open http://localhost:5080 (login: `admin@loop.dev` / `admin123`)
+2. **Logs**: Filter by `service: loop-processor-core` or workflow ID
+3. **Traces**: View activity spans linked to parent workflow
+4. **Metrics**: Query activity execution metrics
 
 ### Temporal UI
 
 Access at `http://localhost:8080` to:
 - View running and completed workflows
 - Inspect workflow history and state
+- Search by `CorrelationId` search attribute
 - Manually trigger signals
 - Terminate stuck workflows
 
