@@ -1,0 +1,60 @@
+{
+  "name": "@payloops/processor-core",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./workflows": {
+      "import": "./dist/workflows/index.js",
+      "types": "./dist/workflows/index.d.ts"
+    },
+    "./activities": {
+      "import": "./dist/activities/index.js",
+      "types": "./dist/activities/index.d.ts"
+    }
+  },
+  "scripts": {
+    "dev": "tsx watch src/worker.ts",
+    "build": "tsup src/index.ts src/workflows/index.ts src/activities/index.ts --format esm --dts",
+    "start": "node dist/worker.js",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@astami/temporal-functions": "^0.1.0",
+    "@temporalio/activity": "^1.11.7",
+    "@temporalio/client": "^1.11.7",
+    "@temporalio/worker": "^1.11.7",
+    "@temporalio/workflow": "^1.11.7",
+    "drizzle-orm": "^0.39.1",
+    "ioredis": "^5.4.2",
+    "pg": "^8.13.1",
+    "pino": "^9.6.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.10",
+    "eslint": "^9.0.0",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "@payloops/processor-stripe": "*",
+    "@payloops/processor-razorpay": "*"
+  },
+  "peerDependenciesMeta": {
+    "@payloops/processor-stripe": {
+      "optional": true
+    },
+    "@payloops/processor-razorpay": {
+      "optional": true
+    }
+  }
+}
