@@ -1,121 +1,209 @@
-# @payloops/processor-core
+# PayLoops Processor Core
 
-Temporal workflows and core processor logic for PayLoops payment platform.
+The **processor-core** service is the workflow engine powering PayLoops. It orchestrates payment processing, handles retries, manages state transitions, and ensures reliable webhook delivery—all with durability guarantees from [Temporal](https://temporal.io).
 
-## Features
+## Role in the Platform
 
-- PaymentWorkflow with 3DS signal support
-- WebhookDeliveryWorkflow with exponential backoff retry
-- PaymentProcessor interface and registry
-- Database and processor activities
-- Integration with @astami/temporal-functions
-
-## Tech Stack
-
-- **Workflow Engine**: Temporal + @astami/temporal-functions
-- **Language**: TypeScript
-- **Database**: PostgreSQL + Drizzle ORM
-
-## Development
-
-```bash
-# Install dependencies
-pnpm install
-
-# Start worker (with hot reload)
-pnpm dev
-
-# Type check
-pnpm typecheck
-
-# Build library
-pnpm build
-
-# Run production worker
-pnpm start
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                         │
+│                           Backend API                                   │
+│                               │                                         │
+│                               │ Triggers workflows                      │
+│                               ▼                                         │
+│   ┌─────────────────────────────────────────────────────────────────┐  │
+│   │               ★ PROCESSOR-CORE (this repo) ★                     │  │
+│   │                                                                  │  │
+│   │  ┌──────────────────────────────────────────────────────────┐   │  │
+│   │  │                   Temporal Workers                        │   │  │
+│   │  │                                                           │   │  │
+│   │  │  PaymentWorkflow    RefundWorkflow    WebhookWorkflow    │   │  │
+│   │  │       │                   │                  │            │   │  │
+│   │  │       ▼                   ▼                  ▼            │   │  │
+│   │  │  ┌─────────┐        ┌─────────┐        ┌─────────┐       │   │  │
+│   │  │  │Activities│        │Activities│        │Activities│       │   │  │
+│   │  │  └─────────┘        └─────────┘        └─────────┘       │   │  │
+│   │  └──────────────────────────────────────────────────────────┘   │  │
+│   │                               │                                  │  │
+│   └───────────────────────────────┼──────────────────────────────────┘  │
+│                                   │                                     │
+│                                   ▼                                     │
+│              ┌────────────────────────────────────────┐                │
+│              │         Payment Processors             │                │
+│              │   processor-stripe  processor-razorpay │                │
+│              └────────────────────────────────────────┘                │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Environment Variables
+## Why Temporal?
 
-```bash
-# Copy example env file
-cp .env.example .env
-```
+Payment processing requires **durability** and **reliability**:
 
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `REDIS_URL` | Redis connection string |
-| `TEMPORAL_ADDRESS` | Temporal server address |
-| `TEMPORAL_NAMESPACE` | Temporal namespace |
-| `ENCRYPTION_KEY` | Key for decrypting processor credentials |
+- If the server crashes mid-payment, the workflow resumes exactly where it left off
+- Long-running operations (like waiting for 3DS) don't block resources
+- Automatic retries with configurable backoff
+- Full audit trail of every state transition
+- Easy to add timeouts, deadlines, and cancellation
 
 ## Workflows
 
 ### PaymentWorkflow
 
-Handles the complete payment lifecycle:
+Handles the complete lifecycle of a payment from order creation to completion.
 
-1. **Create Order** - Initialize payment order
-2. **Route Payment** - Select processor based on rules
-3. **Charge** - Process payment with selected processor
-4. **Handle 3DS** - Wait for 3DS confirmation signal if required
-5. **Confirm** - Finalize payment
-
-```typescript
-// Signals
-- threeDSComplete(result: { success: boolean; paymentId?: string })
 ```
+┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
+│ pending │───▶│ routing │───▶│charging │───▶│ 3DS/SCA │───▶│completed│
+└─────────┘    └─────────┘    └─────────┘    └─────────┘    └─────────┘
+                                                  │
+                                                  ▼
+                                           Wait for signal
+                                           (threeDSComplete)
+```
+
+**States:**
+- `pending` - Order created, awaiting payment
+- `processing` - Routing to optimal processor
+- `authorized` - Payment authorized, awaiting capture
+- `requires_action` - Waiting for 3DS/SCA verification
+- `captured` - Payment successfully captured
+- `failed` - Payment failed
+
+**Signals:**
+- `threeDSComplete` - Customer completed 3DS challenge
 
 ### WebhookDeliveryWorkflow
 
-Delivers webhooks to merchant endpoints:
+Ensures merchants receive webhook notifications reliably.
 
-1. **Attempt Delivery** - POST to merchant webhook URL
-2. **Retry on Failure** - Exponential backoff (1min, 5min, 30min, 2hr, 24hr)
-3. **Mark Final Status** - Success or permanently failed
+```
+┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
+│ attempt │───▶│  retry  │───▶│  retry  │───▶│  final  │
+│   #1    │    │   #2    │    │   #3    │    │ status  │
+└─────────┘    └─────────┘    └─────────┘    └─────────┘
+    1min          5min           30min
+```
 
-## Processor Interface
+**Retry Schedule:**
+1. Immediate
+2. 1 minute
+3. 5 minutes
+4. 30 minutes
+5. 2 hours
+6. 24 hours (final attempt)
+
+## Processor Registry
+
+The core provides a plugin system for payment processors:
 
 ```typescript
-interface PaymentProcessor {
-  name: string;
-  createPayment(input: PaymentInput, config: PaymentConfig): Promise<PaymentResult>;
-  capturePayment(orderId: string, amount: number, config: PaymentConfig): Promise<PaymentResult>;
-  refundPayment(transactionId: string, amount: number, config: PaymentConfig): Promise<RefundResult>;
-  getPaymentStatus(orderId: string, config: PaymentConfig): Promise<PaymentResult>;
+// In processor-stripe or processor-razorpay
+import { registerProcessor, PaymentProcessor } from '@payloops/processor-core';
+
+class StripeProcessor implements PaymentProcessor {
+  name = 'stripe';
+
+  async createPayment(input, config) { /* ... */ }
+  async capturePayment(orderId, amount, config) { /* ... */ }
+  async refundPayment(transactionId, amount, config) { /* ... */ }
+  async getPaymentStatus(orderId, config) { /* ... */ }
 }
+
+registerProcessor(new StripeProcessor());
 ```
+
+Workflows dynamically load the appropriate processor based on routing rules.
+
+## Activities
+
+Activities are the building blocks that workflows orchestrate:
+
+| Activity | Description |
+|----------|-------------|
+| `getOrder` | Fetch order details from database |
+| `updateOrderStatus` | Update order status in database |
+| `getProcessorConfig` | Get decrypted processor credentials |
+| `routePayment` | Determine which processor to use |
+| `processPayment` | Execute payment via processor |
+| `deliverWebhook` | POST webhook to merchant endpoint |
+
+## Development
+
+### Prerequisites
+
+- Node.js 22+
+- pnpm
+- Temporal server (via Docker)
+- PostgreSQL (via Docker)
+
+### Setup
+
+```bash
+# Install dependencies
+pnpm install
+
+# Copy environment template
+cp .env.example .env
+
+# Start Temporal (from root loop repo)
+docker-compose up -d temporal
+
+# Start worker in development mode
+pnpm dev
+```
+
+### Available Scripts
+
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Start worker with hot reload |
+| `pnpm build` | Build for production |
+| `pnpm start` | Run production worker |
+| `pnpm typecheck` | Run TypeScript compiler |
+| `pnpm lint` | Run ESLint |
+
+## Configuration
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `REDIS_URL` | Yes | Redis connection string |
+| `TEMPORAL_ADDRESS` | Yes | Temporal server (default: localhost:7233) |
+| `TEMPORAL_NAMESPACE` | Yes | Temporal namespace |
+| `ENCRYPTION_KEY` | Yes | Key to decrypt processor credentials |
 
 ## Adding a New Processor
 
-See [processor-stripe](https://github.com/payloops/processor-stripe) or [processor-razorpay](https://github.com/payloops/processor-razorpay) for examples.
+1. Create a new repository (e.g., `processor-paypal`)
+2. Implement the `PaymentProcessor` interface
+3. Call `registerProcessor()` on module load
+4. Import the processor in this repo's worker
 
-```typescript
-import { registerProcessor, type PaymentProcessor } from '@payloops/processor-core';
+See [processor-stripe](https://github.com/payloops/processor-stripe) for a complete example.
 
-class NewProcessor implements PaymentProcessor {
-  name = 'newprocessor';
-  // ... implement methods
-}
+## Monitoring
 
-export function register() {
-  registerProcessor(new NewProcessor());
-}
+### Temporal UI
 
-register();
-```
+Access at `http://localhost:8080` to:
+- View running and completed workflows
+- Inspect workflow history and state
+- Manually trigger signals
+- Terminate stuck workflows
 
-## Docker
+### Workflow IDs
 
-```bash
-# Build image
-docker build -t payloops/processor-core .
+Workflows use predictable IDs for easy lookup:
+- Payment: `payment-{orderId}`
+- Webhook: `webhook-{eventId}`
 
-# Run worker
-docker run payloops/processor-core
-```
+## Related Repositories
+
+- [backend](https://github.com/payloops/backend) - Triggers workflows via Temporal client
+- [processor-stripe](https://github.com/payloops/processor-stripe) - Stripe processor implementation
+- [processor-razorpay](https://github.com/payloops/processor-razorpay) - Razorpay processor implementation
 
 ## License
 
-Proprietary - PayLoops
+Copyright © 2025 PayLoops. All rights reserved.
