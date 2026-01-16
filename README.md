@@ -168,7 +168,6 @@ pnpm dev
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `REDIS_URL` | Yes | Redis connection string |
 | `TEMPORAL_ADDRESS` | Yes | Temporal server (default: localhost:7233) |
 | `TEMPORAL_NAMESPACE` | Yes | Temporal namespace |
 | `ENCRYPTION_KEY` | Yes | Key to decrypt processor credentials |
