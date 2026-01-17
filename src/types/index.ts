@@ -91,5 +91,3 @@ export interface PaymentProcessor {
   ): Promise<PaymentResult>;
 }
 
-// Processor registry type
-export type ProcessorRegistry = Map<string, PaymentProcessor>;

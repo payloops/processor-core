@@ -1,6 +1,6 @@
 {
   "name": "@payloops/processor-core",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,34 +9,31 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
-    "./workflows": {
-      "import": "./dist/workflows/index.js",
-      "types": "./dist/workflows/index.d.ts"
+    "./observability": {
+      "import": "./dist/lib/observability/index.js",
+      "types": "./dist/lib/observability/index.d.ts"
     },
-    "./activities": {
-      "import": "./dist/activities/index.js",
-      "types": "./dist/activities/index.d.ts"
+    "./db": {
+      "import": "./dist/lib/db.js",
+      "types": "./dist/lib/db.d.ts"
+    },
+    "./crypto": {
+      "import": "./dist/lib/crypto.js",
+      "types": "./dist/lib/crypto.d.ts"
     }
   },
   "scripts": {
-    "dev": "tsx watch src/worker.ts",
-    "build": "tsup src/index.ts src/workflows/index.ts src/activities/index.ts --format esm --dts",
-    "start": "node dist/worker.js",
+    "build": "tsup src/index.ts src/lib/observability/index.ts src/lib/db.ts src/lib/crypto.ts --format esm --dts",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@astami/temporal-functions": "^0.1.0",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/auto-instrumentations-node": "^0.53.0",
     "@opentelemetry/exporter-metrics-otlp-http": "^0.57.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.57.0",
     "@opentelemetry/sdk-node": "^0.57.0",
     "@opentelemetry/semantic-conventions": "^1.28.0",
-    "@temporalio/activity": "^1.11.7",
-    "@temporalio/client": "^1.11.7",
-    "@temporalio/worker": "^1.11.7",
-    "@temporalio/workflow": "^1.11.7",
     "drizzle-orm": "^0.39.1",
     "pg": "^8.13.1",
     "pino": "^9.6.0",
@@ -44,23 +41,10 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "pino-pretty": "^13.0.0",
     "@types/pg": "^8.11.10",
     "eslint": "^9.0.0",
+    "pino-pretty": "^13.0.0",
     "tsup": "^8.3.5",
-    "tsx": "^4.19.2",
     "typescript": "^5.9.3"
-  },
-  "peerDependencies": {
-    "@payloops/processor-stripe": "*",
-    "@payloops/processor-razorpay": "*"
-  },
-  "peerDependenciesMeta": {
-    "@payloops/processor-stripe": {
-      "optional": true
-    },
-    "@payloops/processor-razorpay": {
-      "optional": true
-    }
   }
 }
