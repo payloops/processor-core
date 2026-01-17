@@ -17,7 +17,10 @@
   "scripts": {
     "build": "tsup src/index.ts src/lib/observability/index.ts --format esm --dts",
     "lint": "eslint src/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "release": "npm run build && npm run typecheck && npm version patch && git push && git push --tags",
+    "release:minor": "npm run build && npm run typecheck && npm version minor && git push && git push --tags",
+    "release:major": "npm run build && npm run typecheck && npm version major && git push && git push --tags"
   },
   "dependencies": {
     "@payloops/observability": "^0.0.1"
