@@ -2,6 +2,10 @@
   "name": "@payloops/processor-core",
   "version": "0.0.6",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/payloops/processor-core"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
