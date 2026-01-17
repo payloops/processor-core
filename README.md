@@ -133,7 +133,7 @@ Activities are the building blocks that workflows orchestrate:
 ### Prerequisites
 
 - Node.js 22+
-- pnpm
+- npm
 - Temporal server (via Docker)
 - PostgreSQL (via Docker)
 
@@ -141,7 +141,7 @@ Activities are the building blocks that workflows orchestrate:
 
 ```bash
 # Install dependencies
-pnpm install
+npm install
 
 # Copy environment template
 cp .env.example .env
@@ -150,18 +150,18 @@ cp .env.example .env
 docker-compose up -d temporal
 
 # Start worker in development mode
-pnpm dev
+npm dev
 ```
 
 ### Available Scripts
 
 | Command | Description |
 |---------|-------------|
-| `pnpm dev` | Start worker with hot reload |
-| `pnpm build` | Build for production |
-| `pnpm start` | Run production worker |
-| `pnpm typecheck` | Run TypeScript compiler |
-| `pnpm lint` | Run ESLint |
+| `npm dev` | Start worker with hot reload |
+| `npm build` | Build for production |
+| `npm start` | Run production worker |
+| `npm typecheck` | Run TypeScript compiler |
+| `npm lint` | Run ESLint |
 
 ## Configuration
 
