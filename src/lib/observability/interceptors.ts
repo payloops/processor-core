@@ -49,60 +49,62 @@ class TracingActivityInterceptor implements ActivityInboundCallsInterceptor {
     const activityType = this.ctx.info.activityType;
     const workflowId = this.ctx.info.workflowExecution.workflowId;
     const startTime = Date.now();
+    const config = this.config;
 
-    // Get current span for trace context (will be set properly after OTel interceptor runs)
-    const currentSpan = trace.getActiveSpan();
-    const spanContext = currentSpan?.spanContext();
-
-    logger.info(
-      {
-        activity: activityType,
-        workflowId,
-        processor: this.config.serviceName,
-        trace_id: spanContext?.traceId,
-        span_id: spanContext?.spanId,
-      },
-      'Activity started'
-    );
-
-    try {
-      // Delegate to Temporal's OTel interceptor which handles trace context propagation
-      const result = await this.otelInterceptor.execute(input, next);
-
-      // Get span context again after OTel interceptor has set it up
-      const finalSpan = trace.getActiveSpan();
-      const finalSpanContext = finalSpan?.spanContext();
+    // Wrap the next function to add logging INSIDE the OTel span context
+    const loggingNext: Next<ActivityInboundCallsInterceptor, 'execute'> = async (
+      nextInput: ActivityExecuteInput
+    ) => {
+      // Now we're inside the OTel interceptor's span context
+      const currentSpan = trace.getActiveSpan();
+      const spanContext = currentSpan?.spanContext();
 
       logger.info(
         {
           activity: activityType,
           workflowId,
-          duration: Date.now() - startTime,
-          trace_id: finalSpanContext?.traceId ?? spanContext?.traceId,
-          span_id: finalSpanContext?.spanId ?? spanContext?.spanId,
+          processor: config.serviceName,
+          trace_id: spanContext?.traceId,
+          span_id: spanContext?.spanId,
         },
-        'Activity completed'
+        'Activity started'
       );
 
-      return result;
-    } catch (error) {
-      const finalSpan = trace.getActiveSpan();
-      const finalSpanContext = finalSpan?.spanContext();
+      try {
+        const result = await next(nextInput);
 
-      logger.error(
-        {
-          activity: activityType,
-          workflowId,
-          error,
-          duration: Date.now() - startTime,
-          trace_id: finalSpanContext?.traceId ?? spanContext?.traceId,
-          span_id: finalSpanContext?.spanId ?? spanContext?.spanId,
-        },
-        'Activity failed'
-      );
+        logger.info(
+          {
+            activity: activityType,
+            workflowId,
+            duration: Date.now() - startTime,
+            trace_id: spanContext?.traceId,
+            span_id: spanContext?.spanId,
+          },
+          'Activity completed'
+        );
 
-      throw error;
-    }
+        return result;
+      } catch (error) {
+        logger.error(
+          {
+            activity: activityType,
+            workflowId,
+            error,
+            duration: Date.now() - startTime,
+            trace_id: spanContext?.traceId,
+            span_id: spanContext?.spanId,
+          },
+          'Activity failed'
+        );
+
+        throw error;
+      }
+    };
+
+    // Delegate to Temporal's OTel interceptor which sets up the span context,
+    // then our loggingNext will execute with the proper trace context
+    return this.otelInterceptor.execute(input, loggingNext);
   }
 }
 
