@@ -30,7 +30,7 @@
     "release:major": "npm run build && npm run typecheck && npm version major && git push && git push --tags"
   },
   "dependencies": {
-    "@payloops/observability": "^0.0.1"
+    "@payloops/observability": "^0.0.13"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
