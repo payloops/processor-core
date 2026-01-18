@@ -30,7 +30,11 @@
     "release:major": "npm run build && npm run typecheck && npm version major && git push && git push --tags"
   },
   "dependencies": {
-    "@payloops/observability": "^0.0.13"
+    "@payloops/observability": "^0.0.13",
+    "@temporalio/interceptors-opentelemetry": "^1.11.7",
+    "@temporalio/worker": "^1.11.7",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-trace-base": "^1.25.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
